@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" role="img" aria-labelledby="title desc">
+  <title id="title">EduFlow — production-grade n8n automation</title>
+  <desc id="desc">A dark technical portfolio banner showing a workflow from webhooks through n8n and PostgreSQL to reliable outcomes.</desc>
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#07111f"/>
+      <stop offset="0.55" stop-color="#0d1b2e"/>
+      <stop offset="1" stop-color="#11142a"/>
+    </linearGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ff6d5a"/>
+      <stop offset="1" stop-color="#ff9b54"/>
+    </linearGradient>
+    <linearGradient id="blue" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#48a9ff"/>
+      <stop offset="1" stop-color="#776dff"/>
+    </linearGradient>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M40 0H0V40" fill="none" stroke="#9bb4d1" stroke-opacity="0.055"/>
+    </pattern>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="12" stdDeviation="18" flood-color="#000" flood-opacity="0.32"/>
+    </filter>
+    <filter id="glow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="10" result="blur"/>
+      <feMerge><feMergeNode in="blur"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+
+  <rect width="1280" height="640" rx="28" fill="url(#bg)"/>
+  <rect width="1280" height="640" rx="28" fill="url(#grid)"/>
+  <circle cx="1110" cy="72" r="230" fill="#776dff" opacity="0.08"/>
+  <circle cx="180" cy="650" r="280" fill="#ff6d5a" opacity="0.07"/>
+
+  <g font-family="Inter,Segoe UI,Arial,sans-serif">
+    <g transform="translate(72 62)">
+      <rect width="126" height="34" rx="17" fill="#ff6d5a" fill-opacity="0.14" stroke="#ff806f" stroke-opacity="0.55"/>
+      <circle cx="20" cy="17" r="5" fill="#ff806f"/>
+      <text x="34" y="22" font-size="13" font-weight="700" fill="#ffc2b9" letter-spacing="1.2">PORTFOLIO</text>
+      <text x="0" y="108" font-size="70" font-weight="800" fill="#f7fbff" letter-spacing="-2">EduFlow</text>
+      <rect x="0" y="127" width="112" height="7" rx="3.5" fill="url(#accent)"/>
+      <text x="0" y="181" font-size="27" font-weight="650" fill="#cfe4fa">Production-grade n8n automation</text>
+      <text x="0" y="220" font-size="18" fill="#88a3bf">Leads · Content operations · Analytics · Reliability</text>
+    </g>
+
+    <g transform="translate(875 58)" filter="url(#shadow)">
+      <rect width="150" height="94" rx="18" fill="#111f34" stroke="#2e4663"/>
+      <text x="20" y="38" font-size="29" font-weight="800" fill="#fff">5</text>
+      <text x="20" y="66" font-size="14" fill="#89a6c5">workflows</text>
+      <rect x="168" width="150" height="94" rx="18" fill="#111f34" stroke="#2e4663"/>
+      <text x="188" y="38" font-size="29" font-weight="800" fill="#fff">12</text>
+      <text x="188" y="66" font-size="14" fill="#89a6c5">data tables</text>
+      <rect x="0" y="112" width="150" height="94" rx="18" fill="#111f34" stroke="#2e4663"/>
+      <text x="20" y="150" font-size="24" font-weight="800" fill="#79d9a5">429 → 200</text>
+      <text x="20" y="178" font-size="14" fill="#89a6c5">retry proven</text>
+      <rect x="168" y="112" width="150" height="94" rx="18" fill="#111f34" stroke="#2e4663"/>
+      <text x="188" y="150" font-size="24" font-weight="800" fill="#ff927f">500 → log</text>
+      <text x="188" y="178" font-size="14" fill="#89a6c5">failure captured</text>
+    </g>
+
+    <g transform="translate(70 388)" filter="url(#shadow)">
+      <path d="M164 70H242M418 70H496M672 70H750M926 70H1004" stroke="#516b89" stroke-width="3" stroke-linecap="round"/>
+      <g fill="#6d88a8">
+        <path d="M236 63l12 7-12 7z"/><path d="M490 63l12 7-12 7z"/><path d="M744 63l12 7-12 7z"/><path d="M998 63l12 7-12 7z"/>
+      </g>
+
+      <g>
+        <rect width="164" height="140" rx="20" fill="#101f33" stroke="#29435f"/>
+        <circle cx="34" cy="34" r="12" fill="#48a9ff" fill-opacity="0.18" stroke="#48a9ff"/>
+        <path d="M28 34h12M34 28v12" stroke="#78c4ff" stroke-width="2" stroke-linecap="round"/>
+        <text x="22" y="79" font-size="17" font-weight="700" fill="#f2f8ff">Webhooks</text>
+        <text x="22" y="105" font-size="13" fill="#85a2c0">DM · comments</text>
+      </g>
+
+      <g transform="translate(254)">
+        <rect width="164" height="140" rx="20" fill="#171f33" stroke="#68413e"/>
+        <circle cx="34" cy="34" r="12" fill="#ff6d5a" fill-opacity="0.18" stroke="#ff806f" filter="url(#glow)"/>
+        <circle cx="28" cy="34" r="3" fill="#ff9b8d"/><circle cx="40" cy="28" r="3" fill="#ff9b8d"/><circle cx="40" cy="40" r="3" fill="#ff9b8d"/>
+        <path d="M30.5 32.5l7-3M30.5 35.5l7 3" stroke="#ff9b8d"/>
+        <text x="22" y="79" font-size="17" font-weight="700" fill="#f2f8ff">n8n</text>
+        <text x="22" y="105" font-size="13" fill="#85a2c0">orchestration</text>
+      </g>
+
+      <g transform="translate(508)">
+        <rect width="164" height="140" rx="20" fill="#101f33" stroke="#29435f"/>
+        <ellipse cx="34" cy="29" rx="13" ry="6" fill="#4169e1" fill-opacity="0.28" stroke="#6f8cff"/>
+        <path d="M21 29v15c0 3 6 6 13 6s13-3 13-6V29M21 36c0 3 6 6 13 6s13-3 13-6" fill="none" stroke="#8299ff"/>
+        <text x="22" y="79" font-size="17" font-weight="700" fill="#f2f8ff">PostgreSQL</text>
+        <text x="22" y="105" font-size="13" fill="#85a2c0">state · idempotency</text>
+      </g>
+
+      <g transform="translate(762)">
+        <rect width="164" height="140" rx="20" fill="#101f33" stroke="#29435f"/>
+        <path d="M24 42l9-20 8 13 6-7" fill="none" stroke="#79d9a5" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="22" y="79" font-size="17" font-weight="700" fill="#f2f8ff">Provider mock</text>
+        <text x="22" y="105" font-size="13" fill="#85a2c0">429 · 500 · metrics</text>
+      </g>
+
+      <g transform="translate(1016)">
+        <rect width="164" height="140" rx="20" fill="#101f33" stroke="#29435f"/>
+        <circle cx="34" cy="34" r="13" fill="#79d9a5" fill-opacity="0.16" stroke="#79d9a5"/>
+        <path d="M27 34l5 5 9-11" fill="none" stroke="#92eab8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <text x="22" y="79" font-size="17" font-weight="700" fill="#f2f8ff">Outcomes</text>
+        <text x="22" y="105" font-size="13" fill="#85a2c0">tested · observable</text>
+      </g>
+    </g>
+
+    <text x="72" y="594" font-size="14" fill="#607d9b">Docker Compose · SQL state machines · failure injection · acceptance tests · security hardening</text>
+    <text x="1208" y="594" text-anchor="end" font-size="14" font-weight="700" fill="#90abc7">github.com/yaKarusel</text>
+  </g>
+</svg>
