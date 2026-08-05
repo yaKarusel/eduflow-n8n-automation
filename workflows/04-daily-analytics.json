@@ -1,0 +1,263 @@
+{
+  "id": "EFANALYTICS00001",
+  "name": "04 EduFlow - Daily Analytics",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 04 — Daily analytics\n\nRuns every day at 09:00 and can also be invoked by an authenticated test webhook. Aggregation stays in PostgreSQL, the rendered Markdown report is upserted by date, and Telegram delivery is optional.",
+        "width": 520,
+        "height": 260
+      },
+      "id": "analytics-architecture-760-400",
+      "name": "Analytics Architecture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -760,
+        -400
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "triggerAtHour": 9
+            }
+          ]
+        }
+      },
+      "id": "daily-schedule-720-80",
+      "name": "Daily Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -720,
+        -80
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eduflow/analytics/run",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "analytics-webhook-720-120",
+      "name": "Analytics Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -720,
+        120
+      ],
+      "webhookId": "webhook-eduflow-analytics-run"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH metrics AS (SELECT * FROM eduflow_daily_metrics($1::date)), rendered AS (\n  SELECT metrics.*,concat('# EduFlow — отчёт за ',report_date,E'\n\n',\n    '- Новые контакты: **',new_contacts,E'**\n','- Новые лиды: **',new_leads,E'**\n','- Горячие лиды: **',hot_leads,E'**\n',\n    '- Входящие DM: **',direct_messages,E'**\n','- Комментарии: **',comments,E'**\n','- Автоответы: **',automatic_replies,E'**\n',\n    '- Передано менеджеру: **',manager_handoffs,E'**\n','- Публикации: **',publications,E'**\n','- Ошибки: **',errors,E'**\n',\n    '- Конверсия комментариев: **',comment_conversion,E'%**\n','- Конверсия DM: **',dm_conversion,E'%**\n',\n    '- Среднее время обработки: **',avg_processing_ms,E' ms**\n','- Лучшая публикация: **',coalesce(top_publication,'нет данных'),'**') markdown\n  FROM metrics\n), stored AS (\n  INSERT INTO daily_reports(report_date,markdown,metrics) SELECT report_date,markdown,to_jsonb(rendered)-'markdown' FROM rendered\n  ON CONFLICT(report_date) DO UPDATE SET markdown=EXCLUDED.markdown,metrics=EXCLUDED.metrics\n  RETURNING report_date,markdown,metrics\n)\nSELECT true AS ok,report_date,markdown,metrics,$2::boolean AS telegram_enabled FROM stored;",
+        "options": {
+          "queryReplacement": "={{ [$json.body?.report_date || new Date().toISOString().slice(0,10),$env.TELEGRAM_ENABLED === \"true\"] }}"
+        }
+      },
+      "id": "aggregate-daily-metrics-190-20",
+      "name": "Aggregate Daily Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -190,
+        20
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Send Analytics Telegram-condition",
+              "leftValue": "={{ $json.telegram_enabled }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "send-analytics-telegram-580-20",
+      "name": "Send Analytics Telegram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        580,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://api.telegram.org/bot\" + $env.TELEGRAM_BOT_TOKEN + \"/sendMessage\" }}",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id:$env.TELEGRAM_CHAT_ID,text:$json.markdown,parse_mode:\"Markdown\"}) }}"
+      },
+      "id": "telegram-daily-report-830-80",
+      "name": "Telegram Daily Report",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        830,
+        -80
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Authorized Analytics-condition",
+              "leftValue": "={{ !$json.headers || $json.headers?.[\"x-eduflow-token\"] === $env.MOCK_API_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "authorized-analytics-guard",
+      "name": "Authorized Analytics",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -430,
+        20
+      ]
+    }
+  ],
+  "connections": {
+    "Daily Schedule": {
+      "main": [
+        [
+          {
+            "node": "Authorized Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Analytics Webhook": {
+      "main": [
+        [
+          {
+            "node": "Authorized Analytics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Aggregate Daily Metrics": {
+      "main": [
+        [
+          {
+            "node": "Send Analytics Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Analytics Telegram": {
+      "main": [
+        [
+          {
+            "node": "Telegram Daily Report",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Authorized Analytics": {
+      "main": [
+        [
+          {
+            "node": "Aggregate Daily Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "EFERROR000000001"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

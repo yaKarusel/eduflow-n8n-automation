@@ -1,0 +1,180 @@
+{
+  "id": "EFERROR000000001",
+  "name": "05 EduFlow - Central Error Handler",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 05 — Central error handler\n\nReceives n8n error events from all production workflows, removes sensitive detail, assigns a stable fingerprint, stores the incident, and optionally alerts Telegram. Successful executions are not persisted by the main workflows.",
+        "width": 520,
+        "height": 260
+      },
+      "id": "error-architecture-650-370",
+      "name": "Error Architecture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -650,
+        -370
+      ]
+    },
+    {
+      "parameters": {},
+      "id": "workflow-error-trigger-600-0",
+      "name": "Workflow Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "position": [
+        -600,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO error_logs(workflow_name,execution_id,node_name,severity,error_message,http_status,source,correlation_id,fingerprint,sanitized_details)\nVALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb)\nRETURNING id,workflow_name,node_name,severity,error_message,correlation_id,$11::boolean AS telegram_enabled;",
+        "options": {
+          "queryReplacement": "={{ [$json.workflow?.name || \"unknown\",String($json.execution?.id || $execution.id),$json.execution?.lastNodeExecuted || $json.execution?.error?.node?.name || \"unknown\",Number($json.execution?.error?.httpCode || $json.execution?.error?.statusCode || 0) >= 500 ? \"critical\" : \"error\",String($json.execution?.error?.message || \"Unknown workflow error\").replace(/(token|secret|password|authorization)[^\\s,}]*/gi,\"$1=[REDACTED]\").slice(0,2000),Number($json.execution?.error?.httpCode || $json.execution?.error?.statusCode || 0) || null,\"n8n\",\"error-\"+String($json.execution?.id || $execution.id),String(($json.workflow?.name || \"unknown\")+\"|\"+($json.execution?.lastNodeExecuted || \"unknown\")+\"|\"+($json.execution?.error?.message || \"unknown\")).toLowerCase().slice(0,500),JSON.stringify({workflow_id:$json.workflow?.id || null,mode:$json.execution?.mode || null,url:$json.execution?.url || null}),$env.TELEGRAM_ENABLED === \"true\"] }}"
+        }
+      },
+      "id": "store-error-log-60-0",
+      "name": "Store Error Log",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -60,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Alert Telegram-condition",
+              "leftValue": "={{ $json.telegram_enabled }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "alert-telegram-210-0",
+      "name": "Alert Telegram",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        210,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://api.telegram.org/bot\" + $env.TELEGRAM_BOT_TOKEN + \"/sendMessage\" }}",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id:$env.TELEGRAM_CHAT_ID,text:\"🚨 EduFlow n8n error\nWorkflow: \"+$json.workflow_name+\"\nNode: \"+$json.node_name+\"\nSeverity: \"+$json.severity+\"\nCorrelation: \"+$json.correlation_id}) }}"
+      },
+      "id": "telegram-error-alert-460-100",
+      "name": "Telegram Error Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        460,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    }
+  ],
+  "connections": {
+    "Workflow Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Store Error Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store Error Log": {
+      "main": [
+        [
+          {
+            "node": "Alert Telegram",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Telegram": {
+      "main": [
+        [
+          {
+            "node": "Telegram Error Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

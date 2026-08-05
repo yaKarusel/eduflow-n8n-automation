@@ -1,0 +1,908 @@
+{
+  "id": "EFCONTENT0000001",
+  "name": "03 EduFlow - Content Approval Publishing",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 03 — Content approval and publishing\n\nSeparate authenticated endpoints create drafts and record approve/reject decisions. Approved due items are published immediately or by a five-minute scheduler. Media hosts are allow-listed. Mock mode is deterministic; live mode uses the current Graph API container + publish sequence and must be validated with the client Meta app.",
+        "width": 520,
+        "height": 260
+      },
+      "id": "content-architecture-980-500",
+      "name": "Content Architecture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -980,
+        -500
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eduflow/content/create",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "create-content-webhook-940-120",
+      "name": "Create Content Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -940,
+        -120
+      ],
+      "webhookId": "webhook-eduflow-content-create"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT * FROM eduflow_create_content($1,$2,$3,$4,$5,$6,$7,$8,$9);",
+        "options": {
+          "queryReplacement": "={{ [$json.body.public_id || \"content-\"+$execution.id,$json.body.title,$json.body.content_type,$json.body.caption,$json.body.media_url,$json.body.scheduled_at || null,$json.body.campaign || \"\",$json.body.created_by,$json.headers?.[\"x-request-id\"] || \"content-\"+$execution.id] }}"
+        }
+      },
+      "id": "create-draft-450-120",
+      "name": "Create Draft",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -450,
+        -120
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eduflow/content/decision",
+        "responseMode": "lastNode",
+        "options": {}
+      },
+      "id": "decision-webhook-940-140",
+      "name": "Decision Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -940,
+        140
+      ],
+      "webhookId": "webhook-eduflow-content-decision"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT d.*,$4::boolean AS immediate,c.correlation_id FROM eduflow_decide_content($1,$2,$3) d JOIN content_items c ON c.id=d.content_id;",
+        "options": {
+          "queryReplacement": "={{ [$json.body.public_id,String($json.body.decision).toLowerCase(),$json.body.reason || \"\",Boolean($json.body.immediate)] }}"
+        }
+      },
+      "id": "record-decision-450-140",
+      "name": "Record Decision",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -450,
+        140
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Publish Decision Now-condition",
+              "leftValue": "={{ $json.status === \"APPROVED\" && ($json.immediate || !$json.scheduled_at || new Date($json.scheduled_at) <= new Date()) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "publish-decision-now-190-140",
+      "name": "Publish Decision Now",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -190,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "due-content-schedule-700-390",
+      "name": "Due Content Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -700,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content_items SET status='PUBLISHING'\nWHERE id IN (SELECT id FROM content_items WHERE status='APPROVED' AND COALESCE(scheduled_at,now())<=now() ORDER BY created_at FOR UPDATE SKIP LOCKED LIMIT 20)\nRETURNING public_id,title,caption,media_url,content_type,scheduled_at,correlation_id;",
+        "options": {}
+      },
+      "id": "select-due-content-450-390",
+      "name": "Select Due Content",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -450,
+        390
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Has Due Content-condition",
+              "leftValue": "={{ Boolean($json.public_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-due-content-210-390",
+      "name": "Has Due Content",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -210,
+        390
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.META_MODE === \"mock\" ? $env.EDUFLOW_MOCK_URL + \"/v1/content/publish\" : \"https://graph.facebook.com/\" + $env.META_API_VERSION + \"/\" + $env.META_IG_ACCOUNT_ID + \"/media\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($env.META_MODE === \"mock\" ? {content_id:$json.public_id,caption:$json.caption,media_url:$json.media_url,content_type:$json.content_type} : Object.assign({caption:$json.caption},$json.content_type === \"reels\" ? {media_type:\"REELS\",video_url:$json.media_url} : {image_url:$json.media_url})) }}"
+      },
+      "id": "create-content-container-170-100",
+      "name": "Create Content Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        170,
+        100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Live Meta Mode-condition",
+              "leftValue": "={{ $env.META_MODE === \"live\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "live-meta-mode-350-100",
+      "name": "Live Meta Mode",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        350,
+        100
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://graph.facebook.com/\" + $env.META_API_VERSION + \"/\" + $env.META_IG_ACCOUNT_ID + \"/media_publish\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({creation_id:$json.id,access_token:$env.META_ACCESS_TOKEN}) }}"
+      },
+      "id": "publish-meta-container-600-0",
+      "name": "Publish Meta Container",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        600,
+        0
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT eduflow_record_publication($1,$2,$3,$4::jsonb); SELECT true AS ok,$1::text AS public_id,$2::text AS publication_id;",
+        "options": {
+          "queryReplacement": "={{ [$(\"Record Decision\").isExecuted ? $(\"Record Decision\").item.json.public_id : $(\"Select Due Content\").item.json.public_id,$json.publication_id || $json.id || \"\",$json.request_id || \"\",JSON.stringify($json)] }}"
+        }
+      },
+      "id": "record-publication-1090-100",
+      "name": "Record Publication",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        1090,
+        100
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE content_items SET status='FAILED' WHERE public_id=$1;\nINSERT INTO error_logs(workflow_name,execution_id,node_name,severity,error_message,http_status,source,correlation_id,fingerprint,sanitized_details)\nVALUES('03 EduFlow - Content Approval Publishing',$2,'Create Content Container','error',$3,$4,'content',$5,'content-publish:'||$4,jsonb_build_object('public_id',$1));\nSELECT false AS ok,'FAILED' AS status,$1::text AS public_id;",
+        "options": {
+          "queryReplacement": "={{ [$(\"Record Decision\").isExecuted ? $(\"Record Decision\").item.json.public_id : $(\"Select Due Content\").item.json.public_id,$execution.id,String($json.message || $json.error || \"Publish failed\"),Number($json.httpCode || $json.statusCode || 500),$(\"Record Decision\").isExecuted ? $(\"Record Decision\").item.json.correlation_id : $(\"Select Due Content\").item.json.correlation_id] }}"
+        }
+      },
+      "id": "record-publish-failure-350-310",
+      "name": "Record Publish Failure",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        350,
+        310
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 6
+            }
+          ]
+        }
+      },
+      "id": "metrics-schedule-190-620",
+      "name": "Metrics Schedule",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        -190,
+        620
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id AS publication_db_id,p.external_publication_id,c.public_id,c.correlation_id FROM publications p JOIN content_items c ON c.id=p.content_item_id WHERE p.published_at>=now()-interval '30 days' ORDER BY p.published_at DESC LIMIT 100;",
+        "options": {}
+      },
+      "id": "select-publications-for-metrics-90-620",
+      "name": "Select Publications for Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        90,
+        620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Has Publication for Metrics-condition",
+              "leftValue": "={{ Boolean($json.publication_db_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "has-publication-for-metrics-300-760",
+      "name": "Has Publication for Metrics",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        300,
+        760
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "={{ $env.META_MODE === \"mock\" ? $env.EDUFLOW_MOCK_URL + \"/v1/content/\" + encodeURIComponent($json.external_publication_id) + \"/metrics\" : \"https://graph.facebook.com/\" + $env.META_API_VERSION + \"/\" + $json.external_publication_id + \"/insights?metric=impressions,reach,likes,comments,saved,shares\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        }
+      },
+      "id": "fetch-publication-metrics-520-620",
+      "name": "Fetch Publication Metrics",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        520,
+        620
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "INSERT INTO publication_metrics(publication_id,metric_date,impressions,reach,likes,comments,saves,shares,raw_metrics)\nVALUES($1,current_date,$2,$3,$4,$5,$6,$7,$8::jsonb)\nON CONFLICT(publication_id,metric_date) DO UPDATE SET impressions=EXCLUDED.impressions,reach=EXCLUDED.reach,likes=EXCLUDED.likes,comments=EXCLUDED.comments,saves=EXCLUDED.saves,shares=EXCLUDED.shares,raw_metrics=EXCLUDED.raw_metrics;\nSELECT true AS ok,$1::bigint AS publication_db_id;",
+        "options": {
+          "queryReplacement": "={{ [$(\"Select Publications for Metrics\").item.json.publication_db_id,Number($json.impressions||0),Number($json.reach||0),Number($json.likes||0),Number($json.comments||0),Number($json.saves||0),Number($json.shares||0),JSON.stringify($json)] }}"
+        }
+      },
+      "id": "store-publication-metrics-620-620",
+      "name": "Store Publication Metrics",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        620,
+        620
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Valid Content Request-condition",
+              "leftValue": "={{ $json.headers?.[\"x-eduflow-token\"] === $env.MOCK_API_TOKEN && Boolean($json.body?.title && $json.body?.content_type && $json.body?.caption && $json.body?.media_url && $json.body?.created_by) && [\"image\",\"carousel\",\"reels\",\"story\"].includes($json.body?.content_type) && String($json.body?.media_url).startsWith(\"https://\") && String($env.ALLOWED_MEDIA_HOSTS || \"example.com\").split(\",\").some(host => String($json.body?.media_url).startsWith(\"https://\"+host.trim()+\"/\") || String($json.body?.media_url).includes(\".\"+host.trim()+\"/\")) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "valid-content-request-guard",
+      "name": "Valid Content Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -700,
+        -120
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Invalid Content Request-0",
+              "name": "ok",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "Invalid Content Request-1",
+              "name": "status",
+              "value": "INVALID_OR_UNAUTHORIZED",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "invalid-content-request-result",
+      "name": "Invalid Content Request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -450,
+        -300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Valid Decision Request-condition",
+              "leftValue": "={{ ($json.headers?.[\"x-approval-secret\"] || $json.body?.secret) === $env.APPROVAL_SECRET && [\"approve\",\"reject\"].includes(String($json.body?.decision || \"\").toLowerCase()) && Boolean($json.body?.public_id) }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "valid-decision-request-guard",
+      "name": "Valid Decision Request",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -700,
+        140
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Invalid Decision Request-0",
+              "name": "ok",
+              "value": false,
+              "type": "boolean"
+            },
+            {
+              "id": "Invalid Decision Request-1",
+              "name": "status",
+              "value": "INVALID_OR_UNAUTHORIZED",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "invalid-decision-request-result",
+      "name": "Invalid Decision Request",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        -450,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "Decision Not Due-0",
+              "name": "ok",
+              "value": true,
+              "type": "boolean"
+            },
+            {
+              "id": "Decision Not Due-1",
+              "name": "public_id",
+              "value": "={{ $json.public_id }}",
+              "type": "string"
+            },
+            {
+              "id": "Decision Not Due-2",
+              "name": "status",
+              "value": "={{ $json.status }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "decision-not-due-result",
+      "name": "Decision Not Due",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [
+        80,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Create Content Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Content Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Decision Webhook": {
+      "main": [
+        [
+          {
+            "node": "Valid Decision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Decision": {
+      "main": [
+        [
+          {
+            "node": "Publish Decision Now",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Decision Now": {
+      "main": [
+        [
+          {
+            "node": "Create Content Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Decision Not Due",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Due Content Schedule": {
+      "main": [
+        [
+          {
+            "node": "Select Due Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Due Content": {
+      "main": [
+        [
+          {
+            "node": "Has Due Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Due Content": {
+      "main": [
+        [
+          {
+            "node": "Create Content Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Create Content Container": {
+      "main": [
+        [
+          {
+            "node": "Live Meta Mode",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Publish Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Live Meta Mode": {
+      "main": [
+        [
+          {
+            "node": "Publish Meta Container",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Publication",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Publish Meta Container": {
+      "main": [
+        [
+          {
+            "node": "Record Publication",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Publish Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Metrics Schedule": {
+      "main": [
+        [
+          {
+            "node": "Select Publications for Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Select Publications for Metrics": {
+      "main": [
+        [
+          {
+            "node": "Has Publication for Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Publication for Metrics": {
+      "main": [
+        [
+          {
+            "node": "Fetch Publication Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Fetch Publication Metrics": {
+      "main": [
+        [
+          {
+            "node": "Store Publication Metrics",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Valid Content Request": {
+      "main": [
+        [
+          {
+            "node": "Create Draft",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Content Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Valid Decision Request": {
+      "main": [
+        [
+          {
+            "node": "Record Decision",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Invalid Decision Request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "EFERROR000000001"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}

@@ -1,0 +1,396 @@
+{
+  "id": "EFDMLEAD00000001",
+  "name": "01 EduFlow - DM Lead Qualification",
+  "active": false,
+  "nodes": [
+    {
+      "parameters": {
+        "content": "## 01 — Instagram DM → Lead\n\nValidates the ingress token, normalizes mock/Meta payloads, classifies intent, scores the lead, reserves an idempotency key in PostgreSQL, then sends exactly one reply. External calls retry on 429/5xx and log terminal failures.\n\nSecrets stay in environment variables; execution payload persistence is disabled for successful production runs.",
+        "width": 520,
+        "height": 260
+      },
+      "id": "dm-architecture-820-380",
+      "name": "DM Architecture",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -820,
+        -380
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "eduflow/instagram/dm",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "id": "instagram-dm-webhook-760-0",
+      "name": "Instagram DM Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2.1,
+      "position": [
+        -760,
+        0
+      ],
+      "webhookId": "webhook-eduflow-instagram-dm"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "WITH input AS (\n  SELECT $1::text event_id,$2::text user_id,$3::text username,left($4::text,4000) body,\n    COALESCE(NULLIF($5::text,''),now()::text)::timestamptz event_time,$6::text account_id,\n    $7::text correlation_id,$8::jsonb payload,$9::int threshold\n), qualified AS (\n  SELECT *,\n    CASE WHEN lower(body) ~ '(сколько|цена|стоим|рассроч|оплат)' THEN 'pricing'\n         WHEN lower(body) ~ '(консультац|позвон|связаться|менеджер)' THEN 'consultation'\n         WHEN lower(body) ~ '(курс|обуч|python|программ)' THEN 'course_interest' ELSE 'general' END intent,\n    CASE WHEN lower(body) ~ '(сколько|цена|стоим|рассроч|оплат)' AND lower(body) ~ '(хочу|купить|запис)' THEN 75\n         WHEN lower(body) ~ '(сколько|цена|стоим|рассроч|оплат)' THEN 55\n         WHEN lower(body) ~ '(консультац|позвон|связаться|менеджер)' THEN 70\n         WHEN lower(body) ~ '(курс|обуч|python|программ)' THEN 40 ELSE 15 END score,\n    CASE WHEN lower(body) ~ '(сколько|цена|стоим|рассроч|оплат)' THEN 'Спасибо за интерес к EduFlow! Я отправлю актуальную программу и варианты оплаты. Напишите ваш уровень и удобное время для консультации.'\n         WHEN lower(body) ~ '(консультац|позвон|связаться|менеджер)' THEN 'Отлично, передаю запрос менеджеру EduFlow. Напишите удобное время и часовой пояс — свяжемся с вами.'\n         WHEN lower(body) ~ '(курс|обуч|python|программ)' THEN 'Расскажу подробнее! Какой у вас текущий уровень и какую задачу хотите решить обучением?'\n         ELSE 'Спасибо за сообщение! Подскажите, какая программа и цель обучения вам интересны?' END reply_text\n  FROM input\n), ready AS (\n  SELECT *,CASE WHEN score>=threshold THEN 'HOT' WHEN score>=30 THEN 'WARM' ELSE 'QUALIFYING' END lead_status FROM qualified\n)\nSELECT result.*,ready.event_id,ready.user_id,ready.correlation_id\nFROM ready CROSS JOIN LATERAL eduflow_process_dm(ready.event_id,ready.user_id,ready.username,ready.body,ready.event_time,ready.account_id,ready.intent,ready.score,ready.lead_status,ready.reply_text,ready.correlation_id,ready.payload) result;",
+        "options": {
+          "queryReplacement": "={{ [$json.body?.event_id || $json.body?.entry?.[0]?.messaging?.[0]?.message?.mid || \"\",$json.body?.user_id || $json.body?.entry?.[0]?.messaging?.[0]?.sender?.id || \"\",$json.body?.username || \"\",$json.body?.text || $json.body?.entry?.[0]?.messaging?.[0]?.message?.text || \"\",$json.body?.timestamp || \"\",$json.body?.instagram_account_id || \"\",$json.headers?.[\"x-request-id\"] || \"dm-\"+($json.body?.event_id || $execution.id),JSON.stringify($json.body || {}),Number($env.HOT_LEAD_THRESHOLD || 50)] }}"
+        }
+      },
+      "id": "store-dm-transaction-260-0",
+      "name": "Store DM Transaction",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        -260,
+        0
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "New DM-condition",
+              "leftValue": "={{ $json.processed }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "new-dm-20-0",
+      "name": "New DM",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -20,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $env.META_MODE === \"mock\" ? $env.EDUFLOW_MOCK_URL + \"/v1/messages/send\" : \"https://graph.facebook.com/\" + $env.META_API_VERSION + \"/\" + $env.META_IG_ACCOUNT_ID + \"/messages\" }}",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify($env.META_MODE === \"mock\" ? {recipient_id:$json.user_id,text:$json.reply_text,idempotency_key:\"dm-reply:\"+$json.event_id} : {recipient:{id:$json.user_id},message:{text:$json.reply_text},messaging_type:\"RESPONSE\"}) }}"
+      },
+      "id": "send-dm-reply-240-100",
+      "name": "Send DM Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        240,
+        -100
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT eduflow_record_outbound($1,'SENT',$2,$3,$4::jsonb,$5,$6);\nUPDATE workflow_events SET status='COMPLETED',processing_ms=(extract(epoch from (now()-created_at))*1000)::int WHERE external_event_id=$7;\nSELECT true AS ok,$7::text AS event_id,$8::int AS score,$9::text AS lead_status;",
+        "options": {
+          "queryReplacement": "={{ [\"dm-reply:\"+$(\"Store DM Transaction\").item.json.event_id,200,$json.request_id||\"\",JSON.stringify($json),$(\"Store DM Transaction\").item.json.reply_text,$json.message_id||$json.id||\"\",$(\"Store DM Transaction\").item.json.event_id,$(\"Store DM Transaction\").item.json.score,$(\"Store DM Transaction\").item.json.lead_status] }}"
+        }
+      },
+      "id": "record-dm-success-510-180",
+      "name": "Record DM Success",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        510,
+        -180
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Notify Manager-condition",
+              "leftValue": "={{ Number($json.score) >= Number($env.HOT_LEAD_THRESHOLD || 50) && $env.TELEGRAM_ENABLED === \"true\" }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "notify-manager-760-180",
+      "name": "Notify Manager",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        760,
+        -180
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ \"https://api.telegram.org/bot\" + $env.TELEGRAM_BOT_TOKEN + \"/sendMessage\" }}",
+        "sendHeaders": false,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-api-token",
+              "value": "={{ $env.META_MODE === \"mock\" ? $env.MOCK_API_TOKEN : \"\" }}"
+            },
+            {
+              "name": "Authorization",
+              "value": "={{ $env.META_MODE === \"live\" ? \"Bearer \" + $env.META_ACCESS_TOKEN : \"\" }}"
+            },
+            {
+              "name": "x-request-id",
+              "value": "={{ $json.correlation_id || $execution.id }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 20000
+        },
+        "sendBody": true,
+        "contentType": "raw",
+        "rawContentType": "application/json",
+        "body": "={{ JSON.stringify({chat_id:$env.TELEGRAM_CHAT_ID,text:\"🔥 Горячий лид EduFlow из Instagram DM\nEvent: \"+$json.event_id+\"\nScore: \"+$json.score}) }}"
+      },
+      "id": "telegram-hot-lead-1010-280",
+      "name": "Telegram Hot Lead",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1010,
+        -280
+      ],
+      "retryOnFail": true,
+      "maxTries": 3,
+      "waitBetweenTries": 1000,
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT eduflow_record_outbound($1,'FAILED',$2,$3,$4::jsonb);\nUPDATE workflow_events SET status='FAILED',processing_ms=(extract(epoch from (now()-created_at))*1000)::int WHERE external_event_id=$5;\nINSERT INTO error_logs(workflow_name,execution_id,node_name,severity,error_message,http_status,source,correlation_id,fingerprint,sanitized_details)\nVALUES('01 EduFlow - DM Lead Qualification',$6,'Send DM Reply','error',$7,$2,'instagram_dm',$8,'dm-send:'||$2,jsonb_build_object('event_id',$5,'http_status',$2));\nSELECT false AS ok,'OUTBOUND_FAILED' AS status,$5::text AS event_id;",
+        "options": {
+          "queryReplacement": "={{ [\"dm-reply:\"+$(\"Store DM Transaction\").item.json.event_id,Number($json.httpCode||$json.statusCode||500),$json.request_id||\"\",JSON.stringify($json),$(\"Store DM Transaction\").item.json.event_id,$execution.id,String($json.message||$json.error||\"Outbound request failed\"),$(\"Store DM Transaction\").item.json.correlation_id] }}"
+        }
+      },
+      "id": "record-dm-failure-510-60",
+      "name": "Record DM Failure",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        510,
+        60
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "EFPOSTGRES000001",
+          "name": "EduFlow PostgreSQL"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 2
+          },
+          "conditions": [
+            {
+              "id": "Authorized DM Event-condition",
+              "leftValue": "={{ $env.META_MODE !== \"mock\" || $json.headers?.[\"x-eduflow-token\"] === $env.MOCK_API_TOKEN }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "authorized-dm-event-guard",
+      "name": "Authorized DM Event",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -500,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Instagram DM Webhook": {
+      "main": [
+        [
+          {
+            "node": "Authorized DM Event",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Store DM Transaction": {
+      "main": [
+        [
+          {
+            "node": "New DM",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "New DM": {
+      "main": [
+        [
+          {
+            "node": "Send DM Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Send DM Reply": {
+      "main": [
+        [
+          {
+            "node": "Record DM Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record DM Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record DM Success": {
+      "main": [
+        [
+          {
+            "node": "Notify Manager",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify Manager": {
+      "main": [
+        [
+          {
+            "node": "Telegram Hot Lead",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Authorized DM Event": {
+      "main": [
+        [
+          {
+            "node": "Store DM Transaction",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "none",
+    "saveManualExecutions": true,
+    "callerPolicy": "workflowsFromSameOwner",
+    "errorWorkflow": "EFERROR000000001"
+  },
+  "pinData": {},
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "tags": []
+}
