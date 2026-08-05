@@ -1,0 +1,11 @@
+{
+  "public_id": "demo-content-python-001",
+  "title": "Как начать изучать Python",
+  "content_type": "reels",
+  "caption": "Черновой текст публикации",
+  "media_url": "https://example.com/video.mp4",
+  "scheduled_at": "2026-08-10T12:00:00+02:00",
+  "campaign": "python-summer",
+  "created_by": "content-manager",
+  "immediate": true
+}

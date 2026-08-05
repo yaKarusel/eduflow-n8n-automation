@@ -1,0 +1,13 @@
+{
+  "object": "instagram",
+  "entry": [{
+    "id": "mock-ig-school",
+    "time": 1785924000,
+    "messaging": [{
+      "sender": {"id": "ig-user-live-001"},
+      "recipient": {"id": "mock-ig-school"},
+      "timestamp": 1785924000000,
+      "message": {"mid": "live-mid-001", "text": "Какая цена курса?"}
+    }]
+  }]
+}

@@ -1,0 +1,8 @@
+{
+  "event_id": "demo-dm-price-001",
+  "user_id": "ig-user-1001",
+  "username": "anna_student",
+  "text": "Сколько стоит курс Python и есть ли рассрочка? Хочу купить.",
+  "timestamp": "2026-08-05T10:00:00Z",
+  "instagram_account_id": "mock-ig-school"
+}
