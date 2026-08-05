@@ -1,0 +1,16 @@
+.env
+.env.*.local
+!.env.example
+!.env.generated.example
+backups/
+*.dump
+*.tgz
+*.tar.gz
+mock-api/data/
+node_modules/
+.DS_Store
+.idea/
+.vscode/
+*.log
+credentials*.json
+tmp/
