@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mock-api/package-lock.json
+
+      - name: Test mock provider
+        working-directory: mock-api
+        run: npm test
+
+      - name: Validate workflow graph and SQL bindings
+        run: node tests/validate-workflows.mjs
+
+      - name: Validate public release and documentation links
+        run: node tests/validate-public-release.mjs
+
+      - name: Validate fixture JSON
+        run: node -e "for (const f of require('fs').readdirSync('fixtures').filter(x => x.endsWith('.json'))) JSON.parse(require('fs').readFileSync('fixtures/' + f, 'utf8'))"
+
+      - name: Validate Compose model
+        run: docker compose --env-file .env.example config --quiet
+
+      - name: Check shell syntax
+        run: bash -n scripts/*.sh
